@@ -44,7 +44,7 @@ let messages = [
 
 exports.sendMessage = onRequest(async (req, res) => {
     try {
-        console.log(`Body :\n${JSON.stringify(req.body, null, 4)}`);
+        console.log(`Request body :\n${JSON.stringify(req.body, null, 4)}`);
 
         let userMessage = {
             role: "user",
@@ -54,6 +54,17 @@ exports.sendMessage = onRequest(async (req, res) => {
 
         let roomRef = getFirestore().collection("chatRooms").doc(req.body.chat_room_id);
         let messagesRef = roomRef.collection("messages");
+
+        const snapshot = await messagesRef.get();
+        if (snapshot.empty) {
+            await messagesRef.add(
+                {
+                    role: "system",
+                    content: "너는 사용자의 친한 친구야. 친구처럼 대해줘."
+                }
+            );
+        }
+
         let newMessageRef = await messagesRef.add(userMessage);
 
         let doc = await newMessageRef.get();
@@ -62,12 +73,12 @@ exports.sendMessage = onRequest(async (req, res) => {
             .tz("Asia/Seoul")
             .format("HH:mm");
 
-        messages.push(userMessage);
-
         let response = {
             timestamp: date,
             formattedTimestamp: formattedDate
         };
+
+        console.log(`Response body :\n${JSON.stringify(response, null, 4)}`);
 
         res.status(200).send({
             code: "200",
@@ -87,27 +98,54 @@ exports.sendMessage = onRequest(async (req, res) => {
 
 exports.getMessageFromAI = onRequest(async (req, res) => {
     try {
+        console.log(`Request body :\n${JSON.stringify(req.body, null, 4)}`);
+
+        let roomRef = getFirestore().collection("chatRooms").doc(req.body.chat_room_id);
+        let messagesRef = roomRef.collection("messages");
+
+        let allMessages = [];
+        const snapshot = await messagesRef.get();
+
+        snapshot.forEach(doc => {
+            allMessages.push({
+                role: doc.data().role,
+                content: doc.data().content,
+                timestamp: doc.data().timestamp,
+            });
+        });
+
         const completion = await openai.chat.completions.create({
             model: "gpt-4o-mini",
-            messages: messages,
+            messages: allMessages,
             store: true,
         });
 
         let assistantMessage = completion.choices[0].message;
-        messages.push(assistantMessage);
+        let message = {
+            role: assistantMessage.role,
+            content: assistantMessage.content,
+            timestamp: FieldValue.serverTimestamp(),
+        };
 
-        assistantMessageRef = await messagesRef.add(assistantMessage);
-        let assistantDoc = await assistantMessageRef.get();
+        let newMessageRef = await messagesRef.add(message);
 
-        console.log(`Choices :\n${JSON.stringify(completion.choices[0], null, 4)}`);
-        console.log(`Usage :\n${JSON.stringify(completion.usage, null, 4)}`);
+        let doc = await newMessageRef.get();
+        let date = doc.createTime.toDate();
+        let formattedDate = moment(date)
+            .tz("Asia/Seoul")
+            .format("HH:mm");
+
+        // console.log(`Choices :\n${JSON.stringify(completion.choices[0], null, 4)}`);
+        // console.log(`Usage :\n${JSON.stringify(completion.usage, null, 4)}`);
 
         let response = {
             role: "assistant",
-            content: assistantDoc.data().content,
+            content: doc.data().content,
             timestamp: date,
             formattedTimestamp: formattedDate
         }
+
+        console.log(`Response body :\n${JSON.stringify(response, null, 4)}`);
 
         res.status(200).send({
             code: "200",
@@ -120,7 +158,7 @@ exports.getMessageFromAI = onRequest(async (req, res) => {
             code: "500",
             message: `failre: ${error}`,
             request: req.body,
-            response: null
+            response: {}
         });
     }
 });
