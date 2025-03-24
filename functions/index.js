@@ -16,12 +16,12 @@ initializeApp();
 
 exports.addUser = onRequest(async (req, res) => {
     try {
-        let body = req.body;
+        const body = req.body;
 
         console.log(`Body :\n${JSON.stringify(body, null, 4)}`);
 
-        let userId = req.body.id;
-        let json = {
+        const userId = req.body.id;
+        const json = {
             name: req.body.name
         };
 
@@ -46,14 +46,14 @@ exports.sendMessage = onRequest(async (req, res) => {
     try {
         console.log(`Request body :\n${JSON.stringify(req.body, null, 4)}`);
 
-        let userMessage = {
+        const userMessage = {
             role: "user",
             content: req.body.content,
             timestamp: FieldValue.serverTimestamp(),
         };
 
-        let roomRef = getFirestore().collection("chatRooms").doc(req.body.chat_room_id);
-        let messagesRef = roomRef.collection("messages");
+        const roomRef = getFirestore().collection("chatRooms").doc(req.body.chat_room_id);
+        const messagesRef = roomRef.collection("messages");
 
         const snapshot = await messagesRef.get();
         if (snapshot.empty) {
@@ -65,17 +65,13 @@ exports.sendMessage = onRequest(async (req, res) => {
             );
         }
 
-        let newMessageRef = await messagesRef.add(userMessage);
+        const newMessageRef = await messagesRef.add(userMessage);
 
-        let doc = await newMessageRef.get();
-        let date = doc.data().timestamp.toDate();
-        let formattedDate = moment(date)
-            .tz("Asia/Seoul")
-            .format("HH:mm");
+        const doc = await newMessageRef.get();
+        const date = doc.data().timestamp.toDate();
 
-        let response = {
-            timestamp: date,
-            formattedTimestamp: formattedDate
+        const response = {
+            timestamp: date
         };
 
         console.log(`Response body :\n${JSON.stringify(response, null, 4)}`);
@@ -100,10 +96,10 @@ exports.getMessageFromAI = onRequest(async (req, res) => {
     try {
         console.log(`Request body :\n${JSON.stringify(req.body, null, 4)}`);
 
-        let roomRef = getFirestore().collection("chatRooms").doc(req.body.chat_room_id);
-        let messagesRef = roomRef.collection("messages");
+        const roomRef = getFirestore().collection("chatRooms").doc(req.body.chat_room_id);
+        const messagesRef = roomRef.collection("messages");
 
-        let allMessages = [];
+        const allMessages = [];
         const snapshot = await messagesRef.get();
 
         snapshot.forEach(doc => {
@@ -120,29 +116,28 @@ exports.getMessageFromAI = onRequest(async (req, res) => {
             store: true,
         });
 
-        let assistantMessage = completion.choices[0].message;
-        let message = {
+        const assistantMessage = completion.choices[0].message;
+        const message = {
             role: assistantMessage.role,
             content: assistantMessage.content,
             timestamp: FieldValue.serverTimestamp(),
         };
 
-        let newMessageRef = await messagesRef.add(message);
+        const newMessageRef = await messagesRef.add(message);
 
-        let doc = await newMessageRef.get();
-        let date = doc.createTime.toDate();
-        let formattedDate = moment(date)
-            .tz("Asia/Seoul")
-            .format("HH:mm");
+        const doc = await newMessageRef.get();
+        const date = doc.createTime.toDate();
 
-        // console.log(`Choices :\n${JSON.stringify(completion.choices[0], null, 4)}`);
-        // console.log(`Usage :\n${JSON.stringify(completion.usage, null, 4)}`);
+        console.log(`Choices :\n${JSON.stringify(completion.choices[0], null, 4)}`);
+        console.log(`Usage :\n${JSON.stringify(completion.usage, null, 4)}`);
 
-        let response = {
+        const response = {
             role: "assistant",
+            // content: "Hello from server.",
             content: doc.data().content,
-            timestamp: date,
-            formattedTimestamp: formattedDate
+            name: "assistant",
+            // timestamp: "2025-03-24T01:19:02.578Z"
+            timestamp: date
         }
 
         console.log(`Response body :\n${JSON.stringify(response, null, 4)}`);
