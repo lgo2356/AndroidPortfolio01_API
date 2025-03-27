@@ -1,6 +1,7 @@
 require("dotenv").config({ path: "../.env" });
 
-const moment = require("moment-timezone");
+const fs = require("fs");
+const path = require("path");
 
 const { OpenAI } = require("openai");
 const apiKey = process.env.OPENAI_API_KEY;
@@ -110,33 +111,38 @@ exports.getMessageFromAI = onRequest(async (req, res) => {
             });
         });
 
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: allMessages,
-            store: true,
-        });
+        // const completion = await openai.chat.completions.create({
+        //     model: "gpt-4o-mini",
+        //     messages: allMessages,
+        //     store: true,
+        // });
 
-        const assistantMessage = completion.choices[0].message;
-        const message = {
-            role: assistantMessage.role,
-            content: assistantMessage.content,
+        // const assistantMessage = completion.choices[0].message;
+        // const message = {
+        //     role: assistantMessage.role,
+        //     content: assistantMessage.content,
+        //     timestamp: FieldValue.serverTimestamp(),
+        // };
+
+        const testMessage = {
+            role: "assistant",
+            content: "Hello from server.",
             timestamp: FieldValue.serverTimestamp(),
-        };
+        }
 
-        const newMessageRef = await messagesRef.add(message);
+        // const newMessageRef = await messagesRef.add(message);
+        const newMessageRef = await messagesRef.add(testMessage);
 
         const doc = await newMessageRef.get();
         const date = doc.createTime.toDate();
 
-        console.log(`Choices :\n${JSON.stringify(completion.choices[0], null, 4)}`);
-        console.log(`Usage :\n${JSON.stringify(completion.usage, null, 4)}`);
+        // console.log(`Choices :\n${JSON.stringify(completion.choices[0], null, 4)}`);
+        // console.log(`Usage :\n${JSON.stringify(completion.usage, null, 4)}`);
 
         const response = {
             role: "assistant",
-            // content: "Hello from server.",
             content: doc.data().content,
             name: "assistant",
-            // timestamp: "2025-03-24T01:19:02.578Z"
             timestamp: date
         }
 
@@ -155,6 +161,46 @@ exports.getMessageFromAI = onRequest(async (req, res) => {
             request: req.body,
             response: {}
         });
+    }
+});
+
+exports.getAIProfileImage = onRequest((req, res) => {
+    try {
+        const imagePath = path.join(__dirname, "images", "hanni.jpg");
+
+        console.log(imagePath);
+
+        fs.readFile(imagePath, (err, data) => {
+            if (err) {
+                console.error("이미지 파일 읽기 오류:", err);
+
+                res.status(500).send({
+                    code: "500",
+                    message: "error",
+                    response: null
+                });
+
+                return;
+            }
+
+            const base64Image = data.toString("base64");
+
+            res.status(200).send({
+                code: "200",
+                message: "success.",
+                response: {
+                    base64: base64Image
+                }
+            });
+        })
+    } catch (error) {
+        console.log(error);
+
+        res.status(500).send({
+            code: "500",
+            message: "error",
+            response: null
+        })
     }
 });
 
