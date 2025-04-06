@@ -39,9 +39,60 @@ exports.addUser = onRequest(async (req, res) => {
     }
 });
 
-let messages = [
-    { role: "system", content: "You are a user's friend." },
-]
+exports.initChatbot = onRequest(async (req, res) => {
+    try {
+        const date = new Date();
+
+        console.log(`Request body :\n${JSON.stringify(req.body, null, 4)}\nDate : ${date}`);
+
+        const systemMessages = [
+            {
+                role: "system",
+                content: "당신은 사용자와 친한 친구인 대화형 AI 모델입니다.",
+                timestamp: date
+            },
+            {
+                role: "system",
+                content: "당신의 이름은 '하니'입니다.",
+                timestamp: date
+            },
+            {
+                role: "system",
+                content: "사용자와 반말로 대화하세요.",
+                timestamp: date
+            }
+        ];
+    
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: systemMessages,
+            store: true
+        });
+    
+        const roomRef = getFirestore().collection("chatRooms").doc(req.body.chat_room_id);
+        const messagesRef = roomRef.collection("messages");
+
+        systemMessages.forEach(async message => {
+            await messagesRef.add(message);
+        });
+    
+        console.log(`Response : ${response}.`);
+    
+        res.status(200).send({
+            code: "200",
+            message: "success.",
+            request: req.body,
+            response: true
+        });
+    } catch (error) {
+        res.status(500).send({
+            code: "500",
+            message: `failre: ${error}`,
+            request: req.body,
+            response: false
+        });
+    }
+});
 
 exports.sendMessage = onRequest(async (req, res) => {
     try {
@@ -55,17 +106,6 @@ exports.sendMessage = onRequest(async (req, res) => {
 
         const roomRef = getFirestore().collection("chatRooms").doc(req.body.chat_room_id);
         const messagesRef = roomRef.collection("messages");
-
-        const snapshot = await messagesRef.get();
-        if (snapshot.empty) {
-            await messagesRef.add(
-                {
-                    role: "system",
-                    content: "너는 사용자의 친한 친구야. 친구처럼 대해줘."
-                }
-            );
-        }
-
         const newMessageRef = await messagesRef.add(userMessage);
 
         const doc = await newMessageRef.get();
@@ -101,7 +141,9 @@ exports.getMessageFromAI = onRequest(async (req, res) => {
         const messagesRef = roomRef.collection("messages");
 
         const allMessages = [];
-        const snapshot = await messagesRef.get();
+        const snapshot = await messagesRef
+            .orderBy("timestamp", "asc")
+            .get();
 
         snapshot.forEach(doc => {
             allMessages.push({
@@ -111,38 +153,35 @@ exports.getMessageFromAI = onRequest(async (req, res) => {
             });
         });
 
-        // const completion = await openai.chat.completions.create({
-        //     model: "gpt-4o-mini",
-        //     messages: allMessages,
-        //     store: true,
-        // });
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: allMessages,
+            store: true,
+        });
 
-        // const assistantMessage = completion.choices[0].message;
-        // const message = {
-        //     role: assistantMessage.role,
-        //     content: assistantMessage.content,
-        //     timestamp: FieldValue.serverTimestamp(),
-        // };
-
-        const testMessage = {
-            role: "assistant",
-            content: "Hello from server.",
+        const assistantMessage = completion.choices[0].message;
+        const message = {
+            role: assistantMessage.role,
+            content: assistantMessage.content,
             timestamp: FieldValue.serverTimestamp(),
-        }
+        };
 
-        // const newMessageRef = await messagesRef.add(message);
-        const newMessageRef = await messagesRef.add(testMessage);
+        // const testMessage = {
+        //     role: "assistant",
+        //     content: "Hello from server.",
+        //     timestamp: FieldValue.serverTimestamp(),
+        // }
+
+        const newMessageRef = await messagesRef.add(message);
+        // const newMessageRef = await messagesRef.add(testMessage);
 
         const doc = await newMessageRef.get();
         const date = doc.createTime.toDate();
 
-        // console.log(`Choices :\n${JSON.stringify(completion.choices[0], null, 4)}`);
-        // console.log(`Usage :\n${JSON.stringify(completion.usage, null, 4)}`);
-
         const response = {
             role: "assistant",
             content: doc.data().content,
-            name: "assistant",
+            name: "Hanni",
             timestamp: date
         }
 
